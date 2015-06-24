@@ -3,6 +3,7 @@
 from suds.client import Client
 from bunch import Bunch
 import xml.etree.ElementTree as ET
+import datetime as DT
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -44,7 +45,7 @@ services = [
     #'TaxGroupDetails',
     #'TaxGroups',
     #'TimeEntries',
-    #'Timesheets',
+    'Timesheets',
     #'Users',
     #'Worktypes',
 ]
@@ -55,11 +56,26 @@ def init(org):
     for service in services:
         clients[service] = getclient(org, service)
 
+def getts(auth, userid, weekstart):
+    assert weekstart - DT.timedelta(days=weekstart.weekday()) == weekstart
+    respstr = clients.Timesheets.service.QueryTimesheetsDetails(auth, userid, weekstart)
+    resp = ET.fromstring(unicode(respstr).encode('utf-8'))
+    assert resp.find('.//Success').text == 'true'
+    valstr = resp.find('.//Value').text
+    val = ET.fromstring(valstr.encode('utf-8'))
+    return val
+
 def main():
     org, username, password = open('.tenacct').read().strip().split(':')
     init(org)
-    authxmlstr = clients.LogonAs.service.AuthUser(org, username, password, '', True)
-    authxml = ET.fromstring(authxmlstr)
+    auth = clients.LogonAs.service.AuthUser(org, username, password, '', True)
+    userid = int(ET.fromstring(auth).find('.//UniqueId').text)
+
+    # Get a monday
+    startdate = DT.date(year=2015, month=05, day=19)
+    weekstart = startdate - DT.timedelta(days=startdate.weekday())
+
+    ts = getts(auth, userid, weekstart)
 
 if __name__ == '__main__':
     main()
