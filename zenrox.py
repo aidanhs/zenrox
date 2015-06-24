@@ -4,6 +4,7 @@ from __future__ import print_function
 
 from suds.client import Client
 from bunch import Bunch
+from collections import OrderedDict
 import xml.etree.ElementTree as ET
 import datetime as DT
 import logging
@@ -76,10 +77,11 @@ class Entry(object):
                 self.note = node[0].find('.//Description').text
 
 class Timesheet(object):
-    def __init__(self, et, *args, **kwargs):
+    def __init__(self, weekstart, et, *args, **kwargs):
         super(Timesheet, self).__init__(*args, **kwargs)
         assert et.tag == 'Timesheet'
 
+        self.startdate = weekstart
         self.entries = []
         self.assignments = {}
 
@@ -125,7 +127,18 @@ def getts(auth, userid, weekstart):
     else:
         assert False
     assert len(node) == 1
-    return Timesheet(node[0])
+    return Timesheet(weekstart, node[0])
+
+def makeweek(ts):
+    week = OrderedDict()
+    for i in range(7):
+        week[ts.startdate + DT.timedelta(days=i)] = []
+    for entry in ts.entries:
+        week[entry.date].append({
+            "assignment": ts.assignments[entry.assignment][1],
+            "numhours": entry.time.total_seconds()/60/60,
+        })
+    return week
 
 def main():
     org, username, password = open('.tenacct').read().strip().split(':')
@@ -138,10 +151,14 @@ def main():
     startdate = DT.date(year=2015, month=05, day=19)
     weekstart = startdate - DT.timedelta(days=startdate.weekday())
 
+    # Actually get timesheet
     ts = getts(auth, userid, weekstart)
-    for entry in ts.entries:
-        log(ts.assignments[entry.assignment][1])
-        log('    %s: %s', entry.date.isoformat(), entry.time.total_seconds()/60/60)
+
+    log('Printing timesheet')
+    for date, entries in makeweek(ts).items():
+        log('%s %s:', date.isoformat(), date.strftime('%a'))
+        for entry in entries:
+            log('    %s - %s hrs', entry['assignment'], entry['numhours'])
 
 if __name__ == '__main__':
     main()
