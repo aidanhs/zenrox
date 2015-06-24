@@ -7,8 +7,6 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger('suds.client').setLevel(logging.DEBUG)
 
 def getclient(org, svc):
-    if svc != 'LogonAs':
-        svc = 'sdk/' + svc
     url = 'https://{}.tenrox.net/TWebService/{}.svc?singleWsdl'.format(org, svc)
     client = Client(url)
     # Tenrox forces a redirect to https, but the wsdl says http connection.
