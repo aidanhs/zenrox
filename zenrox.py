@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from suds.client import Client
 from bunch import Bunch
 import xml.etree.ElementTree as ET
