@@ -50,6 +50,49 @@ services = [
     #'Worktypes',
 ]
 
+class Entry(object):
+    def __init__(self, et, *args, **kwargs):
+        super(Entry, self).__init__(*args, **kwargs)
+        assert et.tag == 'TimesheetEntry'
+
+        self.note = None
+        self.assignment = (
+            int(et.find('.//AssignmentUid').text),
+            int(et.find('.//AssignmentAttributeUid').text)
+        )
+        self.date = DT.datetime.strptime(et.find('.//EntryDate').text, '%m/%d/%Y').date()
+        self.time = DT.timedelta(seconds=int(et.find('.//TotalTime').text))
+
+        for node in et:
+            if node.tag == 'TimeEntryNotes':
+                if len(node) == 0:
+                    continue
+                assert len(node) == 1
+                self.note = node[0].find('.//Description').text
+
+class Timesheet(object):
+    def __init__(self, et, *args, **kwargs):
+        super(Timesheet, self).__init__(*args, **kwargs)
+        assert et.tag == 'Timesheet'
+
+        self.entries = []
+        self.assignments = {}
+
+        for node in et:
+            if node.tag == 'TimesheetEntries':
+                for subnode in node:
+                    self.entries.append(Entry(subnode))
+            elif node.tag == 'TimesheetAssignmentAttributes':
+                for subnode in node:
+                    key = (
+                        int(subnode.find('.//AssignmentUid').text),
+                        int(subnode.find('.//UniqueID').text)
+                    )
+                    self.assignments[key] = (
+                        subnode.find('.//AssignmentName').text,
+                        subnode.find('.//ProjectName').text
+                    )
+
 clients = Bunch()
 
 def init(org):
@@ -62,8 +105,14 @@ def getts(auth, userid, weekstart):
     resp = ET.fromstring(unicode(respstr).encode('utf-8'))
     assert resp.find('.//Success').text == 'true'
     valstr = resp.find('.//Value').text
-    val = ET.fromstring(valstr.encode('utf-8'))
-    return val
+    tss = ET.fromstring(valstr.encode('utf-8')) # Timesheets element
+    for node in tss:
+        if node.tag == 'MyTimesheets':
+            break
+    else:
+        assert False
+    assert len(node) == 1
+    return Timesheet(node[0])
 
 def main():
     org, username, password = open('.tenacct').read().strip().split(':')
@@ -76,6 +125,9 @@ def main():
     weekstart = startdate - DT.timedelta(days=startdate.weekday())
 
     ts = getts(auth, userid, weekstart)
+    for entry in ts.entries:
+        print ts.assignments[entry.assignment][1]
+        print '    ' + entry.date.isoformat() + ': ' + str(entry.time.total_seconds()/60/60)
 
 if __name__ == '__main__':
     main()
