@@ -1,13 +1,18 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 from suds.client import Client
 from bunch import Bunch
 import xml.etree.ElementTree as ET
 import datetime as DT
-
 import logging
-logging.basicConfig(level=logging.INFO)
-logging.getLogger('suds.client').setLevel(logging.DEBUG)
+import os
+
+DEBUG = False
+
+def log(msg, *args):
+    print(msg % args)
 
 def getclient(org, svc):
     url = 'https://{}.tenrox.net/TWebService/{}.svc?singleWsdl'.format(org, svc)
@@ -96,10 +101,18 @@ class Timesheet(object):
 clients = Bunch()
 
 def init(org):
+    global DEBUG
+    if os.environ.get('DEBUG', '0') == '1':
+        DEBUG = True
+    if DEBUG:
+        logging.basicConfig(level=logging.INFO)
+        logging.getLogger('suds.client').setLevel(logging.DEBUG)
+    log('Initialising services')
     for service in services:
         clients[service] = getclient(org, service)
 
 def getts(auth, userid, weekstart):
+    log('Getting timesheet for week starting %s', weekstart.isoformat())
     assert weekstart - DT.timedelta(days=weekstart.weekday()) == weekstart
     respstr = clients.Timesheets.service.QueryTimesheetsDetails(auth, userid, weekstart)
     resp = ET.fromstring(unicode(respstr).encode('utf-8'))
@@ -117,6 +130,7 @@ def getts(auth, userid, weekstart):
 def main():
     org, username, password = open('.tenacct').read().strip().split(':')
     init(org)
+    log('Logging into %s tenrox as %s', org, username)
     auth = clients.LogonAs.service.AuthUser(org, username, password, '', True)
     userid = int(ET.fromstring(auth).find('.//UniqueId').text)
 
@@ -126,8 +140,8 @@ def main():
 
     ts = getts(auth, userid, weekstart)
     for entry in ts.entries:
-        print ts.assignments[entry.assignment][1]
-        print '    ' + entry.date.isoformat() + ': ' + str(entry.time.total_seconds()/60/60)
+        log(ts.assignments[entry.assignment][1])
+        log('    %s: %s', entry.date.isoformat(), entry.time.total_seconds()/60/60)
 
 if __name__ == '__main__':
     main()
