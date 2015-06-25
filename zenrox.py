@@ -9,11 +9,18 @@ import xml.etree.ElementTree as ET
 import datetime as DT
 import logging
 import os
+import re
 
 DEBUG = False
 
 def log(msg, *args):
     print(msg % args)
+
+def xv(element, tag, converter=unicode):
+    assert re.match('^[A-Za-z0-9]+$', tag) is not None
+    res = element.findall('.//' + tag)
+    assert len(res) == 1
+    return converter(res[0].text)
 
 def getclient(org, svc):
     url = 'https://{}.tenrox.net/TWebService/{}.svc?singleWsdl'.format(org, svc)
@@ -64,18 +71,18 @@ class Entry(object):
 
         self.note = None
         self.assignment = (
-            int(et.find('.//AssignmentUid').text),
-            int(et.find('.//AssignmentAttributeUid').text)
+            xv(et, 'AssignmentUid', int),
+            xv(et, 'AssignmentAttributeUid', int),
         )
-        self.date = DT.datetime.strptime(et.find('.//EntryDate').text, '%m/%d/%Y').date()
-        self.time = DT.timedelta(seconds=int(et.find('.//TotalTime').text))
+        self.date = DT.datetime.strptime(xv(et, 'EntryDate'), '%m/%d/%Y').date()
+        self.time = DT.timedelta(seconds=xv(et, 'TotalTime', int))
 
         for node in et:
             if node.tag == 'TimeEntryNotes':
                 if len(node) == 0:
                     continue
                 assert len(node) == 1
-                self.note = node[0].find('.//Description').text
+                self.note = xv(node[0], 'Description')
 
 class Timesheet(object):
     def __init__(self, weekstart, et, *args, **kwargs):
@@ -94,12 +101,12 @@ class Timesheet(object):
             elif node.tag == 'TimesheetAssignmentAttributes':
                 for subnode in node:
                     key = (
-                        int(subnode.find('.//AssignmentUid').text),
-                        int(subnode.find('.//UniqueID').text)
+                        xv(subnode, 'AssignmentUid', int),
+                        xv(subnode, 'UniqueID', int),
                     )
                     self.assignments[key] = (
-                        subnode.find('.//AssignmentName').text,
-                        subnode.find('.//ProjectName').text
+                        xv(subnode, 'AssignmentName'),
+                        xv(subnode, 'ProjectName'),
                     )
 
 clients = Bunch()
@@ -120,8 +127,8 @@ def getts(auth, userid, weekstart):
     assert weekstart - DT.timedelta(days=weekstart.weekday()) == weekstart
     respstr = clients.Timesheets.service.QueryTimesheetsDetails(auth, userid, weekstart)
     resp = ET.fromstring(unicode(respstr).encode('utf-8'))
-    assert resp.find('.//Success').text == 'true'
-    valstr = resp.find('.//Value').text
+    assert xv(resp, 'Success') == 'true'
+    valstr = xv(resp, 'Value')
     tss = ET.fromstring(valstr.encode('utf-8')) # Timesheets element
     for node in tss:
         if node.tag == 'MyTimesheets':
@@ -137,21 +144,21 @@ def get_assignments(auth, userid, weekstart):
     weekend = weekstart + DT.timedelta(days=6)
     respstr = clients.Assignments.service.QueryByUserId(auth, userid, weekstart.isoformat(), weekend.isoformat())
     resp = ET.fromstring(unicode(respstr).encode('utf-8'))
-    assert resp.find('.//Success').text == 'true'
-    valstr = resp.find('.//Value').text
+    assert xv(resp, 'Success') == 'true'
+    valstr = xv(resp, 'Value')
     aoa = ET.fromstring(valstr.encode('utf-8')) # ArrayOfAssignment element
     assignments = {}
     for assignment in aoa:
-        if assignment.find('.//AccessType').text == '2':
+        if xv(assignment, 'AccessType') == '2':
             # these seem to be the old 'training' codes that don't show up any
             # more - most entries appear to have a value of '1'
             continue
-        if assignment.find('.//IsLeaveTime').text == 'true':
+        if xv(assignment, 'IsLeaveTime') == 'true':
             continue
-        aid = int(assignment.find('.//UniqueId').text)
+        aid = xv(assignment, 'UniqueId', int)
         assignments[aid] = {
-            'ProjectName': assignment.find('.//ProjectName').text,
-            'TaskName': assignment.find('.//TaskName').text,
+            'ProjectName': xv(assignment, 'ProjectName'),
+            'TaskName': xv(assignment, 'TaskName'),
         }
     return assignments
 
@@ -171,7 +178,7 @@ def main():
     init(org)
     log('Logging into %s tenrox as %s', org, username)
     auth = clients.LogonAs.service.AuthUser(org, username, password, '', True)
-    userid = int(ET.fromstring(auth).find('.//UniqueId').text)
+    userid = xv(ET.fromstring(auth), 'UniqueId', int)
 
     # Get a monday
     startdate = DT.date(year=2015, month=05, day=25)
