@@ -27,7 +27,7 @@ def getclient(org, svc):
 services = [
     'LogonAs',
 
-    #'Assignments',
+    'Assignments',
     #'BusinessUnits',
     #'ChargeEntries',
     #'Clients',
@@ -129,6 +129,30 @@ def getts(auth, userid, weekstart):
     assert len(node) == 1
     return Timesheet(weekstart, node[0])
 
+def get_assignments(auth, userid, weekstart):
+    log('Getting assignments for week starting %s', weekstart.isoformat())
+    assert weekstart - DT.timedelta(days=weekstart.weekday()) == weekstart
+    weekend = weekstart + DT.timedelta(days=6)
+    respstr = clients.Assignments.service.QueryByUserId(auth, userid, weekstart.isoformat(), weekend.isoformat())
+    resp = ET.fromstring(unicode(respstr).encode('utf-8'))
+    assert resp.find('.//Success').text == 'true'
+    valstr = resp.find('.//Value').text
+    aoa = ET.fromstring(valstr.encode('utf-8')) # ArrayOfAssignment element
+    assignments = {}
+    for assignment in aoa:
+        if assignment.find('.//AccessType').text == '2':
+            # these seem to be the old 'training' codes that don't show up any
+            # more - most entries appear to have a value of '1'
+            continue
+        if assignment.find('.//IsLeaveTime').text == 'true':
+            continue
+        aid = int(assignment.find('.//UniqueId').text)
+        assignments[aid] = {
+            'ProjectName': assignment.find('.//ProjectName').text,
+            'TaskName': assignment.find('.//TaskName').text,
+        }
+    return assignments
+
 def makeweek(ts):
     week = OrderedDict()
     for i in range(7):
@@ -148,17 +172,24 @@ def main():
     userid = int(ET.fromstring(auth).find('.//UniqueId').text)
 
     # Get a monday
-    startdate = DT.date(year=2015, month=05, day=19)
+    startdate = DT.date(year=2015, month=05, day=25)
     weekstart = startdate - DT.timedelta(days=startdate.weekday())
 
     # Actually get timesheet
     ts = getts(auth, userid, weekstart)
+    assignments = get_assignments(auth, userid, weekstart)
 
-    log('Printing timesheet')
+    log('===================')
+    log('Possible assignments:')
+    for assignment in assignments.values():
+        log('%s  -  %s', assignment['ProjectName'], assignment['TaskName'])
+    log('===================')
+    log('Timesheets:')
     for date, entries in makeweek(ts).items():
         log('%s %s:', date.isoformat(), date.strftime('%a'))
         for entry in entries:
             log('    %s - %s hrs', entry['assignment'], entry['numhours'])
+    log('===================')
 
 if __name__ == '__main__':
     main()
