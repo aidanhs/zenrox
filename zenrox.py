@@ -201,4 +201,11 @@ def main():
     log('===================')
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except:
+        if DEBUG:
+            import pdb
+            pdb.post_mortem()
+        else:
+            raise
