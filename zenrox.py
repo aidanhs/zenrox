@@ -16,9 +16,8 @@ DEBUG = False
 def log(msg, *args):
     print(msg % args)
 
-def xv(element, tag, converter=unicode):
-    assert re.match('^[A-Za-z0-9]+$', tag) is not None
-    res = element.findall('.//' + tag)
+def xv(element, xpath, converter=unicode):
+    res = element.findall(xpath)
     assert len(res) == 1
     return converter(res[0].text)
 
@@ -63,17 +62,44 @@ services = [
     #'Worktypes',
 ]
 
+class Assignment(object):
+    def __init__(self, et, *args, **kwargs):
+        super(Assignment, self).__init__(*args, **kwargs)
+        assert et.tag == 'Assignment'
+        self._et = et
+
+        assert xv(et, 'AccessType') == '1'
+        assert xv(et, 'IsLeaveTime') == 'false'
+
+        self.uid = xv(et, 'UniqueId', int)
+        self.project_name = xv(et, 'ProjectName')
+        self.task_name = xv(et, 'TaskName')
+
+class AssignmentAttr(object):
+    def __init__(self, et, *args, **kwargs):
+        super(AssignmentAttr, self).__init__(*args, **kwargs)
+        assert et.tag == 'AssignmentAttribute'
+        self._et = et
+
+        assert xv(et, 'HasTimeEntry') == 'true'
+        assert xv(et, 'AccessType') == '1'
+        assert xv(et, 'IsNonWorkingTime') == 'false' # TODO
+
+        self.uid = xv(et, 'UniqueID', int)
+        self.assignment_id = xv(et, 'AssignmentUid', int)
+
 class Entry(object):
     def __init__(self, et, *args, **kwargs):
         super(Entry, self).__init__(*args, **kwargs)
         assert et.tag == 'TimesheetEntry'
         self._et = et
 
+        assert xv(et, 'IsNonWorking') != 'true' # TODO
+
+        self.uid = xv(et, 'UniqueID', int)
         self.note = None
-        self.assignment = (
-            xv(et, 'AssignmentUid', int),
-            xv(et, 'AssignmentAttributeUid', int),
-        )
+        self.assignment_id = xv(et, 'AssignmentUid', int)
+        self.assignment_attr_id = xv(et, 'AssignmentAttributeUid', int)
         self.date = DT.datetime.strptime(xv(et, 'EntryDate'), '%m/%d/%Y').date()
         self.time = DT.timedelta(seconds=xv(et, 'TotalTime', int))
 
@@ -91,23 +117,24 @@ class Timesheet(object):
         self._et = et
 
         self.startdate = weekstart
-        self.entries = []
-        self.assignments = {}
+        self.entries = OrderedDict()
+        self.assignment_attrs = OrderedDict()
 
         for node in et:
             if node.tag == 'TimesheetEntries':
                 for subnode in node:
-                    self.entries.append(Entry(subnode))
+                    # TODO
+                    if xv(subnode, 'IsNonWorking') == 'true':
+                        continue
+                    val = Entry(subnode)
+                    self.entries[val.uid] = val
             elif node.tag == 'TimesheetAssignmentAttributes':
                 for subnode in node:
-                    key = (
-                        xv(subnode, 'AssignmentUid', int),
-                        xv(subnode, 'UniqueID', int),
-                    )
-                    self.assignments[key] = (
-                        xv(subnode, 'AssignmentName'),
-                        xv(subnode, 'ProjectName'),
-                    )
+                    # TODO
+                    if xv(subnode, 'IsNonWorkingTime') == 'true':
+                        continue
+                    val = AssignmentAttr(subnode)
+                    self.assignment_attrs[val.uid] = val
 
 clients = Bunch()
 
@@ -122,7 +149,7 @@ def init(org):
     for service in services:
         clients[service] = getclient(org, service)
 
-def getts(auth, userid, weekstart):
+def get_timesheet(auth, userid, weekstart):
     log('Getting timesheet for week starting %s', weekstart.isoformat())
     assert weekstart - DT.timedelta(days=weekstart.weekday()) == weekstart
     respstr = clients.Timesheets.service.QueryTimesheetsDetails(auth, userid, weekstart)
@@ -147,28 +174,27 @@ def get_assignments(auth, userid, weekstart):
     assert xv(resp, 'Success') == 'true'
     valstr = xv(resp, 'Value')
     aoa = ET.fromstring(valstr.encode('utf-8')) # ArrayOfAssignment element
-    assignments = {}
+    assignments = OrderedDict()
     for assignment in aoa:
         if xv(assignment, 'AccessType') == '2':
             # these seem to be the old 'training' codes that don't show up any
             # more - most entries appear to have a value of '1'
             continue
+        # TODO: handle leave time
         if xv(assignment, 'IsLeaveTime') == 'true':
             continue
         aid = xv(assignment, 'UniqueId', int)
-        assignments[aid] = {
-            'ProjectName': xv(assignment, 'ProjectName'),
-            'TaskName': xv(assignment, 'TaskName'),
-        }
+        assignments[aid] = Assignment(assignment)
     return assignments
 
-def makeweek(ts):
+def makeweek(timesheet, assignments):
     week = OrderedDict()
     for i in range(7):
-        week[ts.startdate + DT.timedelta(days=i)] = []
-    for entry in ts.entries:
+        week[timesheet.startdate + DT.timedelta(days=i)] = []
+    for entry in timesheet.entries.values():
+        assignment = assignments[entry.assignment_id]
         week[entry.date].append({
-            "assignment": ts.assignments[entry.assignment][1],
+            "assignment": assignment.project_name + ' : ' + assignment.task_name,
             "numhours": entry.time.total_seconds()/60/60,
         })
     return week
@@ -185,16 +211,16 @@ def main():
     weekstart = startdate - DT.timedelta(days=startdate.weekday())
 
     # Actually get timesheet
-    ts = getts(auth, userid, weekstart)
+    timesheet = get_timesheet(auth, userid, weekstart)
     assignments = get_assignments(auth, userid, weekstart)
 
     log('===================')
     log('Possible assignments:')
     for assignment in assignments.values():
-        log('%s  -  %s', assignment['ProjectName'], assignment['TaskName'])
+        log('%s  -  %s', assignment.project_name, assignment.task_name)
     log('===================')
     log('Timesheets:')
-    for date, entries in makeweek(ts).items():
+    for date, entries in makeweek(timesheet, assignments).items():
         log('%s %s:', date.isoformat(), date.strftime('%a'))
         for entry in entries:
             log('    %s - %s hrs', entry['assignment'], entry['numhours'])
