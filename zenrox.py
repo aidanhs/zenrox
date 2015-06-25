@@ -157,13 +157,10 @@ def get_timesheet(auth, userid, weekstart):
     assert xv(resp, 'Success') == 'true'
     valstr = xv(resp, 'Value')
     tss = ET.fromstring(valstr.encode('utf-8')) # Timesheets element
-    for node in tss:
-        if node.tag == 'MyTimesheets':
-            break
-    else:
-        assert False
-    assert len(node) == 1
-    return Timesheet(weekstart, node[0])
+    mytss = tss.findall('MyTimesheets')
+    assert len(mytss) == 1
+    assert len(mytss[0]) == 1
+    return Timesheet(weekstart, mytss[0][0])
 
 def get_assignments(auth, userid, weekstart):
     log('Getting assignments for week starting %s', weekstart.isoformat())
