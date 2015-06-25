@@ -60,6 +60,7 @@ class Entry(object):
     def __init__(self, et, *args, **kwargs):
         super(Entry, self).__init__(*args, **kwargs)
         assert et.tag == 'TimesheetEntry'
+        self._et = et
 
         self.note = None
         self.assignment = (
@@ -80,6 +81,7 @@ class Timesheet(object):
     def __init__(self, weekstart, et, *args, **kwargs):
         super(Timesheet, self).__init__(*args, **kwargs)
         assert et.tag == 'Timesheet'
+        self._et = et
 
         self.startdate = weekstart
         self.entries = []
