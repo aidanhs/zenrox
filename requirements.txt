@@ -1,2 +1,2 @@
 bunch>=1.0.1
-suds>=0.4
+suds-jurko==0.6
