@@ -138,16 +138,21 @@ class Timesheet(object):
 
 clients = Bunch()
 
-def init(org):
+def init():
     global DEBUG
     if os.environ.get('DEBUG', '0') == '1':
         DEBUG = True
     if DEBUG:
         logging.basicConfig(level=logging.INFO)
         logging.getLogger('suds.client').setLevel(logging.DEBUG)
+    org, username, password = open('.tenacct').read().strip().split(':')
     log('Initialising services')
     for service in services:
         clients[service] = getclient(org, service)
+    log('Logging into %s tenrox as %s', org, username)
+    auth = clients.LogonAs.service.AuthUser(org, username, password, '', True)
+    userid = xv(ET.fromstring(auth), 'UniqueId', int)
+    return userid, auth
 
 def get_timesheet(auth, userid, weekstart):
     log('Getting timesheet for week starting %s', weekstart.isoformat())
@@ -197,11 +202,7 @@ def makeweek(timesheet, assignments):
     return week
 
 def main():
-    org, username, password = open('.tenacct').read().strip().split(':')
-    init(org)
-    log('Logging into %s tenrox as %s', org, username)
-    auth = clients.LogonAs.service.AuthUser(org, username, password, '', True)
-    userid = xv(ET.fromstring(auth), 'UniqueId', int)
+    userid, auth = init()
 
     # Get a monday
     startdate = DT.date(year=2015, month=05, day=25)
