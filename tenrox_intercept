@@ -1,0 +1,72 @@
+Tenrox has a mobile app. I attempted to intercept it.
+
+```
+$ wget http://mirror.roe.ch/rel/sslsplit/sslsplit-0.4.11.tar.bz2
+$ tar xf sslsplit-0.4.11.tar.bz2
+$ cd sslsplit-0.4.11
+$ apt-get install libssl-dev
+$ apt-get install libevent-2.0-5 libevent-dev
+$ make
+$ cat >x509v3ca.cnf <<'EOF'
+[ req ]
+distinguished_name = reqdn
+[ reqdn ]
+[ v3_ca ]
+basicConstraints        = CA:TRUE
+subjectKeyIdentifier    = hash
+authorityKeyIdentifier  = keyid:always,issuer:always
+EOF
+$ openssl genrsa -out ca.key 1024
+$ openssl req -new -nodes -x509 -sha1 -out ca.crt -key ca.key -config x509v3ca.cnf -extensions v3_ca -subj '/O=SSLsplit Root CA/CN=SSLsplit Root CA/' -set_serial 0 -days 3650
+$ ./sslsplit -k ca.key -c ca.crt https 0.0.0.0 443 m.tenrox.net 443 http 0.0.0.0 80 m.tenrox.net 80
+```
+The tenrox app rejects the invalid cert.
+
+
+```
+$ apt-get install stunnel
+$ stunnel -f -c -r m.tenrox.net:443 -d 0.0.0.0:80
+```
+In combination with host rewriting and dns spoofing.
+
+Host rewriting:
+```
+$ cat alter
+#!/bin/bash
+set -e
+
+FNAME=$(mktemp --tmpdir=$(pwd)/fifo -u)
+mkfifo $FNAME
+stdbuf -i0 -o0 -e0 sed 's/^Host: my\.actual\.host\.com/Host: m.tenrox.net/' >$FNAME <&0 &
+
+socat -u - - <&3 3<&- 4>&- &
+socat -u - - <$FNAME >&4 4>&- 3<&- &
+
+exec 1>&- 4>&-
+exec 0<&- 3<&-
+
+wait
+rm $FNAME
+$ sudo ~/socat-2.0.0-b8/socat -v TCP-LISTEN:80,reuseaddr,fork 'EXEC:./alter | TCP:172.17.0.67:80' # into docker
+```
+
+DNS spoofing:
+```
+$ echo '*.tenrox.net      A 12.34.56.78' >> /etc/ettercap/etter.dns
+$ sudo ettercap -q -i wlan1 -T -P dns_spoof -M arp //// ////
+```
+
+Helpful command for seeing everything going on to a host:
+```
+$ sudo tcpflow -p -c -i eth0 'not dst or src port 22' 2>/dev/null
+```
+
+Ended up creating my own CA, installing on my phone and intercepting with socat:
+https://jamielinux.com/docs/openssl-certificate-authority/create-the-root-pair.html
+```
+$ openssl gendh -out dh_2048.pem -2 2048
+$ cd ca
+$ sudo socat -v OPENSSL-LISTEN:443,dhparam=../dh_2048.pem,method=TLS1,verify=0,cipher=HIGH,key=m.tenrox.net/private/m.tenrox.net.key.pem,cert=fullchain.pem,fork,reuseaddr SSL:m.tenrox.net:443,verify=0 >../log 2>&1
+```
+
+It turns out the mobile app uses a JSON api!
