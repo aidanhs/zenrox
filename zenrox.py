@@ -56,9 +56,13 @@ services = [
 ]
 
 class Assignment(object):
+
+    keys = set(['AccessType', 'ActionType', 'ActualWorkHours', 'AssignCompleted', 'AssignmentName', 'ClientName', 'ClientUniqueId', 'CurrentTimeBudget', 'Custom1', 'DirtyStatus', 'ElapsedTime', 'EmailAddress', 'EnableEtc', 'EndDate', 'Etc', 'EtcEndDate', 'EtcStartDate', 'FirstName', 'IsBillable', 'IsFunded', 'IsLeaveTime', 'IsOverHead', 'IsPayable', 'IsRandD', 'LastName', 'LastTimeEntryDate', 'Note', 'ProjectId', 'ProjectManagerFullName', 'ProjectManagerID', 'ProjectName', 'ProjectSchedId', 'ProjectScheduling', 'QueryLevel', 'ShowAssignment', 'ShowETC', 'StartDate', 'TaskColor', 'TaskName', 'TaskUniqueId', 'TimeEntries', 'UniqueId', 'UserId', 'UserIdNo', 'WorkTypeName', 'WorkTypeUniqueId', 'WorkflowEntryId'])
+
     def __init__(self, obj, *args, **kwargs):
         super(Assignment, self).__init__(*args, **kwargs)
         assert obj.__class__.__name__ == 'Assignment'
+        assert set([kv[0] for kv in obj]) == self.keys
         self._obj = obj
 
         assert obj.AccessType == 1
@@ -69,9 +73,13 @@ class Assignment(object):
         self.task_name = obj.TaskName
 
 class AssignmentAttr(object):
+
+    keys = set(['AccessType', 'AssignmentComp', 'AssignmentName', 'AssignmentUid', 'BusinessUnitName', 'BusinessUnitUid', 'ChargeName', 'ChargeUid', 'ClientName', 'ClientUid', 'ComponentName', 'ComponentUid', 'Dirty', 'ETC', 'ETCChanged', 'EndDate', 'HasTimeEntry', 'IsBillable', 'IsCustom', 'IsDefault', 'IsETCEditable', 'IsFunded', 'IsNonWorkingTime', 'IsPayable', 'IsRandD', 'ManagerUid', 'PercentComplete', 'PhaseName', 'PhaseUid', 'PortfolioName', 'PortfolioUid', 'ProductName', 'ProductUid', 'ProjectName', 'ProjectUid', 'ShowETC', 'SiteName', 'SiteUid', 'StartDate', 'TaskName', 'TaskUid', 'TeamName', 'TeamUid', 'TemplateUid', 'TitleName', 'TitleUid', 'UniqueID', 'UserGroupName', 'UserGroupUid', 'UserUid', 'WorkTypeName', 'WorkTypeUid'])
+
     def __init__(self, obj, *args, **kwargs):
         super(AssignmentAttr, self).__init__(*args, **kwargs)
         assert obj.__class__.__name__ == 'AssignmentAttribute'
+        assert set([kv[0] for kv in obj]) == self.keys
         self._obj = obj
 
         assert obj.HasTimeEntry is True
@@ -82,9 +90,13 @@ class AssignmentAttr(object):
         self.assignment_id = obj.AssignmentUid
 
 class Entry(object):
+
+    keys = set(['Approved', 'AssignmentAttributeUid', 'AssignmentUid', 'BUnitUid', 'Billed', 'ChargeUid', 'CreatedByUid', 'CreationDate', 'DoubleOvertime', 'EntryDate', 'EntryState', 'HasNotes', 'IsBillable', 'IsCustom', 'IsDirty', 'IsFunded', 'IsNonWorking', 'IsPayable', 'IsRandD', 'Overtime', 'PhaseUid', 'Posted', 'RegularTime', 'Rejected', 'SiteName', 'SiteUid', 'TaskUid', 'TimeEntryNotes', 'TimesheetUid', 'TotalTime', 'UniqueID', 'UpdateDate', 'UpdatedByUid', 'UserUid', 'hasError'])
+
     def __init__(self, obj, *args, **kwargs):
         super(Entry, self).__init__(*args, **kwargs)
         assert obj.__class__.__name__ == 'TimesheetEntry'
+        assert set([kv[0] for kv in obj]) == self.keys
         self._obj = obj
 
         assert obj.IsNonWorking is not True # TODO
@@ -103,9 +115,13 @@ class Entry(object):
             self.note = subobjs[0].Description
 
 class Timesheet(object):
+
+    keys = set(['ActiveSiteUid', 'ActivityGUID', 'AllowEntryInTheAdvance', 'AllowEntryInTheAdvanceType', 'AllowEntryInThePast', 'AllowEntryInThePastType', 'BankedOverTime', 'CanManagerModifyBillable', 'CanManagerModifyPayable', 'DefaultClientUid', 'DefaultProjectUid', 'DefaultWorkTypeUid', 'Details', 'EmployeeType', 'EndDate', 'FunctionalGroupUid', 'FunctionalManagerUid', 'HasAssignments', 'HasErrors', 'HasNotes', 'HasTimeentries', 'HireDate', 'IsTimesheetClosed', 'LeaveTimes', 'LockedDates', 'MasterSiteUid', 'PeriodClosed', 'PersonalDayTime', 'ResourceType', 'RoleObjectType', 'ShowAdjustmentsSection', 'ShowAssignmentsSection', 'ShowLeaveTimeSection', 'ShowNonWorkingTimeSection', 'SickLeaveTime', 'StartDate', 'TemplateName', 'TemplateUid', 'TerminatedDate', 'TimeIncrement', 'TimesheetAssignmentAttributes', 'TimesheetColumns', 'TimesheetEntries', 'TimesheetErrors', 'TimesheetNotes', 'TimesheetStates', 'TimesheetTransitions', 'TotalPeriodOverTime', 'TotalPeriodPayableTime', 'TotalPeriodRegTime', 'UniqueId', 'UserAccessStatus', 'UserFirstName', 'UserID', 'UserLastName', 'UserType', 'UserUID', 'UsersAccessStatus', 'VacationTime', 'WorkflowGUID'])
+
     def __init__(self, weekstart, obj, *args, **kwargs):
         super(Timesheet, self).__init__(*args, **kwargs)
         assert obj.__class__.__name__ == 'Timesheet'
+        assert set([kv[0] for kv in obj]) == self.keys
         self._obj = obj
 
         self.startdate = weekstart
