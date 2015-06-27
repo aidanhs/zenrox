@@ -95,6 +95,7 @@ class Entry(object):
         self._obj = obj
 
         assert obj.IsNonWorking is not True # TODO
+        assert obj.TotalTime == obj.RegularTime + obj.Overtime + obj.DoubleOvertime
 
         self.uid = obj.UniqueID
         self.note = None
@@ -103,8 +104,8 @@ class Entry(object):
         self.date = DT.datetime.strptime(obj.EntryDate, '%m/%d/%Y').date()
         self.time = DT.timedelta(seconds=obj.TotalTime)
 
-        subobjs = obj.TimeEntryNotes.TimesheetNote
-        if len(subobjs) != 0:
+        if obj.TimeEntryNotes is not None:
+            subobjs = obj.TimeEntryNotes.TimesheetNote
             assert len(subobjs) == 1
             self.note = subobjs[0].Description
 
@@ -118,16 +119,18 @@ class Timesheet(object):
         self.entries = OrderedDict()
         self.assignment_attrs = OrderedDict()
 
-        for subobj in obj.TimesheetEntries.TimesheetEntry:
-            assert subobj.IsNonWorking in [True, False]
-            if subobj.IsNonWorking:
-                continue # TODO: don't skip
-            self.entries[subobj.UniqueID] = Entry(subobj)
-        for subobj in obj.TimesheetAssignmentAttributes.AssignmentAttribute:
-            assert subobj.IsNonWorkingTime in [True, False]
-            if subobj.IsNonWorkingTime:
-                continue # TODO: don't skip
-            self.assignment_attrs[subobj.UniqueID] = AssignmentAttr(subobj)
+        if obj.TimesheetEntries is not None:
+            for subobj in obj.TimesheetEntries.TimesheetEntry:
+                assert subobj.IsNonWorking in [True, False]
+                if subobj.IsNonWorking:
+                    continue # TODO: don't skip
+                self.entries[subobj.UniqueID] = Entry(subobj)
+        if obj.TimesheetAssignmentAttributes is not None:
+            for subobj in obj.TimesheetAssignmentAttributes.AssignmentAttribute:
+                assert subobj.IsNonWorkingTime in [True, False]
+                if subobj.IsNonWorkingTime:
+                    continue # TODO: don't skip
+                self.assignment_attrs[subobj.UniqueID] = AssignmentAttr(subobj)
 
 clients = Bunch()
 
