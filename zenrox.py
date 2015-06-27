@@ -5,21 +5,14 @@ from __future__ import print_function
 from suds.client import Client
 from bunch import Bunch
 from collections import OrderedDict
-import xml.etree.ElementTree as ET
 import datetime as DT
 import logging
 import os
-import re
 
 DEBUG = False
 
 def log(msg, *args):
     print(msg % args)
-
-def xv(element, xpath, converter=unicode):
-    res = element.findall(xpath)
-    assert len(res) == 1
-    return converter(res[0].text)
 
 def getclient(org, svc):
     url = 'https://{}.tenrox.net/TWebService/{}.svc?singleWsdl'.format(org, svc)
