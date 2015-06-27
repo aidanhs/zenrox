@@ -63,78 +63,71 @@ services = [
 ]
 
 class Assignment(object):
-    def __init__(self, et, *args, **kwargs):
+    def __init__(self, obj, *args, **kwargs):
         super(Assignment, self).__init__(*args, **kwargs)
-        assert et.tag == 'Assignment'
-        self._et = et
+        assert obj.__class__.__name__ == 'Assignment'
+        self._obj = obj
 
-        assert xv(et, 'AccessType') == '1'
-        assert xv(et, 'IsLeaveTime') == 'false'
+        assert obj.AccessType == 1
+        assert obj.IsLeaveTime is False
 
-        self.uid = xv(et, 'UniqueId', int)
-        self.project_name = xv(et, 'ProjectName')
-        self.task_name = xv(et, 'TaskName')
+        self.uid = obj.UniqueId
+        self.project_name = obj.ProjectName
+        self.task_name = obj.TaskName
 
 class AssignmentAttr(object):
-    def __init__(self, et, *args, **kwargs):
+    def __init__(self, obj, *args, **kwargs):
         super(AssignmentAttr, self).__init__(*args, **kwargs)
-        assert et.tag == 'AssignmentAttribute'
-        self._et = et
+        assert obj.__class__.__name__ == 'AssignmentAttribute'
+        self._obj = obj
 
-        assert xv(et, 'HasTimeEntry') == 'true'
-        assert xv(et, 'AccessType') == '1'
-        assert xv(et, 'IsNonWorkingTime') == 'false' # TODO
+        assert obj.HasTimeEntry is True
+        assert obj.AccessType == 1
+        assert obj.IsNonWorkingTime is False
 
-        self.uid = xv(et, 'UniqueID', int)
-        self.assignment_id = xv(et, 'AssignmentUid', int)
+        self.uid = obj.UniqueID
+        self.assignment_id = obj.AssignmentUid
 
 class Entry(object):
-    def __init__(self, et, *args, **kwargs):
+    def __init__(self, obj, *args, **kwargs):
         super(Entry, self).__init__(*args, **kwargs)
-        assert et.tag == 'TimesheetEntry'
-        self._et = et
+        assert obj.__class__.__name__ == 'TimesheetEntry'
+        self._obj = obj
 
-        assert xv(et, 'IsNonWorking') != 'true' # TODO
+        assert obj.IsNonWorking is not True # TODO
 
-        self.uid = xv(et, 'UniqueID', int)
+        self.uid = obj.UniqueID
         self.note = None
-        self.assignment_id = xv(et, 'AssignmentUid', int)
-        self.assignment_attr_id = xv(et, 'AssignmentAttributeUid', int)
-        self.date = DT.datetime.strptime(xv(et, 'EntryDate'), '%m/%d/%Y').date()
-        self.time = DT.timedelta(seconds=xv(et, 'TotalTime', int))
+        self.assignment_id = obj.AssignmentUid
+        self.assignment_attr_id = obj.AssignmentAttributeUid
+        self.date = DT.datetime.strptime(obj.EntryDate, '%m/%d/%Y').date()
+        self.time = DT.timedelta(seconds=obj.TotalTime)
 
-        for node in et:
-            if node.tag == 'TimeEntryNotes':
-                if len(node) == 0:
-                    continue
-                assert len(node) == 1
-                self.note = xv(node[0], 'Description')
+        subobjs = obj.TimeEntryNotes.TimesheetNote
+        if len(subobjs) != 0:
+            assert len(subobjs) == 1
+            self.note = subobjs[0].Description
 
 class Timesheet(object):
-    def __init__(self, weekstart, et, *args, **kwargs):
+    def __init__(self, weekstart, obj, *args, **kwargs):
         super(Timesheet, self).__init__(*args, **kwargs)
-        assert et.tag == 'Timesheet'
-        self._et = et
+        assert obj.__class__.__name__ == 'Timesheet'
+        self._obj = obj
 
         self.startdate = weekstart
         self.entries = OrderedDict()
         self.assignment_attrs = OrderedDict()
 
-        for node in et:
-            if node.tag == 'TimesheetEntries':
-                for subnode in node:
-                    # TODO
-                    if xv(subnode, 'IsNonWorking') == 'true':
-                        continue
-                    val = Entry(subnode)
-                    self.entries[val.uid] = val
-            elif node.tag == 'TimesheetAssignmentAttributes':
-                for subnode in node:
-                    # TODO
-                    if xv(subnode, 'IsNonWorkingTime') == 'true':
-                        continue
-                    val = AssignmentAttr(subnode)
-                    self.assignment_attrs[val.uid] = val
+        for subobj in obj.TimesheetEntries.TimesheetEntry:
+            assert subobj.IsNonWorking in [True, False]
+            if subobj.IsNonWorking:
+                continue # TODO: don't skip
+            self.entries[subobj.UniqueID] = Entry(subobj)
+        for subobj in obj.TimesheetAssignmentAttributes.AssignmentAttribute:
+            assert subobj.IsNonWorkingTime in [True, False]
+            if subobj.IsNonWorkingTime:
+                continue # TODO: don't skip
+            self.assignment_attrs[subobj.UniqueID] = AssignmentAttr(subobj)
 
 clients = Bunch()
 
@@ -150,43 +143,33 @@ def init():
     for service in services:
         clients[service] = getclient(org, service)
     log('Logging into %s tenrox as %s', org, username)
-    auth = clients.LogonAs.service.AuthUser(org, username, password, '', True)
-    userid = xv(ET.fromstring(auth), 'UniqueId', int)
+    auth = clients.LogonAs.service.Authenticate(org, username, password, '', True)
+    userid = auth.UniqueId
     return userid, auth
 
 def get_timesheet(auth, userid, weekstart):
     log('Getting timesheet for week starting %s', weekstart.isoformat())
     assert weekstart - DT.timedelta(days=weekstart.weekday()) == weekstart
-    respstr = clients.Timesheets.service.QueryTimesheetsDetails(auth, userid, weekstart)
-    resp = ET.fromstring(unicode(respstr).encode('utf-8'))
-    assert xv(resp, 'Success') == 'true'
-    valstr = xv(resp, 'Value')
-    tss = ET.fromstring(valstr.encode('utf-8')) # Timesheets element
-    mytss = tss.findall('MyTimesheets')
-    assert len(mytss) == 1
-    assert len(mytss[0]) == 1
-    return Timesheet(weekstart, mytss[0][0])
+    tss = clients.Timesheets.service.QueryTimesheetsDetailsTyped(auth, userid, weekstart)
+    mytss = tss.MyTimesheets
+    assert len(mytss.Timesheet) == 1
+    return Timesheet(weekstart, mytss.Timesheet[0])
 
 def get_assignments(auth, userid, weekstart):
     log('Getting assignments for week starting %s', weekstart.isoformat())
     assert weekstart - DT.timedelta(days=weekstart.weekday()) == weekstart
     weekend = weekstart + DT.timedelta(days=6)
-    respstr = clients.Assignments.service.QueryByUserId(auth, userid, weekstart.isoformat(), weekend.isoformat())
-    resp = ET.fromstring(unicode(respstr).encode('utf-8'))
-    assert xv(resp, 'Success') == 'true'
-    valstr = xv(resp, 'Value')
-    aoa = ET.fromstring(valstr.encode('utf-8')) # ArrayOfAssignment element
+    aoa = clients.Assignments.service.QueryByUserIdTyped(auth, userid, weekstart.isoformat(), weekend.isoformat())
     assignments = OrderedDict()
-    for assignment in aoa:
-        if xv(assignment, 'AccessType') == '2':
+    for assignment in aoa.Assignment:
+        if assignment.AccessType == 2:
             # these seem to be the old 'training' codes that don't show up any
             # more - most entries appear to have a value of '1'
             continue
         # TODO: handle leave time
-        if xv(assignment, 'IsLeaveTime') == 'true':
+        if assignment.IsLeaveTime == True:
             continue
-        aid = xv(assignment, 'UniqueId', int)
-        assignments[aid] = Assignment(assignment)
+        assignments[assignment.UniqueId] = Assignment(assignment)
     return assignments
 
 def makeweek(timesheet, assignments):
