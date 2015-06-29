@@ -12,6 +12,8 @@ import urllib
 import json
 import logging
 import os
+import argparse
+import sys
 
 DEBUG = False
 
@@ -159,14 +161,7 @@ class Timesheet(object):
 
 clients = Bunch()
 
-def init():
-    global DEBUG
-    if os.environ.get('DEBUG', '0') == '1':
-        DEBUG = True
-    if DEBUG:
-        logging.basicConfig(level=logging.INFO)
-        logging.getLogger('suds.client').setLevel(logging.DEBUG)
-        logging.getLogger('requests.packages').setLevel(logging.DEBUG)
+def initapi():
     org, username, password = open('.tenacct').read().strip().split(':')
     log('Initialising services')
     for service in services:
@@ -246,11 +241,11 @@ def makeweek(timesheet, assignments):
         })
     return week
 
-def main():
-    userid, auth, mobauth = init()
+def action_printweek(datestr):
+    userid, auth, mobauth = initapi()
 
     # Get a monday
-    startdate = DT.date(year=2015, month=05, day=23)
+    startdate = DT.datetime.strptime(datestr, '%Y-%m-%d').date()
     weekdate = weekstart(startdate)
 
     # Actually get timesheet
@@ -268,13 +263,44 @@ def main():
         for entry in entries:
             log('    %s - %s hrs', entry['assignment'], entry['numhours'])
     log('===================')
+    return 0
 
-if __name__ == '__main__':
+def main():
+
+    # Init debug logging if necessary
+    global DEBUG
+    if os.environ.get('DEBUG', '0') == '1':
+        DEBUG = True
+    if DEBUG:
+        logging.basicConfig(level=logging.INFO)
+        logging.getLogger('suds.client').setLevel(logging.DEBUG)
+        logging.getLogger('requests.packages').setLevel(logging.DEBUG)
+
+    actions = ['printweek']
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest='action', help='Action. One of: ' + ' '.join(actions))
+
+    sub_parsers = {}
+    for action in actions:
+        sub_parsers[action] = subparsers.add_parser(action)
+
+    sub_parsers['printweek'].add_argument('date', help='select timesheet including this day, format yyyy-mm-dd')
+
+    args = parser.parse_args()
+
     try:
-        main()
+        if args.action == 'printweek':
+            sys.exit(action_printweek(args.date))
+        else:
+            assert False
+    except SystemExit:
+        raise
     except:
         if DEBUG:
             import pdb
             pdb.post_mortem()
         else:
             raise
+
+if __name__ == '__main__':
+    main()
