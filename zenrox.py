@@ -136,11 +136,13 @@ class Timesheet(object):
         self._obj = obj
 
         assert weekstart(weekdate) == weekdate
+        assert len(obj.TimesheetStates.TimesheetState) == 1
 
         self.uid = obj.UniqueId
         self.startdate = weekdate
         self.entries = OrderedDict()
         self.assignment_attrs = OrderedDict()
+        self.readonly = obj.TimesheetStates.TimesheetState[0].IsReadOnly
 
         if obj.TimesheetEntries is not None:
             for subobj in obj.TimesheetEntries.TimesheetEntry:
@@ -203,13 +205,12 @@ def get_assignments(auth, userid, weekdate):
 
 # I really really tried to use the official API for this but it's astoundingly
 # poorly designed (and documented). The mobile api is much friendlier.
-def newentry(auth, mobauth, userid, assignment, date, numhours):
+def newentry(mobauth, timesheet, assignment, date, numhours):
+    assert not timesheet.readonly
     numsecs = numhours * 60 * 60
     assert numsecs % 900 == 0
     assert numsecs == int(numsecs)
     numsecs = int(numsecs)
-
-    timesheet = get_timesheet(auth, userid, weekstart(date))
 
     putval = {"KeyValues": [
         {"IsAttribute": True, "Property": "myproject", "Value": assignment.project_id},
