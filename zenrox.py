@@ -4,12 +4,18 @@ from __future__ import print_function
 
 from suds.client import Client
 from bunch import Bunch
+import requests
+
 from collections import OrderedDict
 import datetime as DT
+import urllib
+import json
 import logging
 import os
 
 DEBUG = False
+
+MOBAPI = 'https://m.tenrox.net/2014R3/tenterprise/api/'
 
 def log(msg, *args):
     print(msg % args)
@@ -72,7 +78,9 @@ class Assignment(object):
         assert obj.IsLeaveTime is False
 
         self.uid = obj.UniqueId
+        self.project_id = obj.ProjectId
         self.project_name = obj.ProjectName
+        self.task_id = obj.TaskUniqueId
         self.task_name = obj.TaskName
 
 class AssignmentAttr(object):
@@ -129,6 +137,7 @@ class Timesheet(object):
 
         assert weekstart(weekdate) == weekdate
 
+        self.uid = obj.UniqueId
         self.startdate = weekdate
         self.entries = OrderedDict()
         self.assignment_attrs = OrderedDict()
@@ -155,14 +164,18 @@ def init():
     if DEBUG:
         logging.basicConfig(level=logging.INFO)
         logging.getLogger('suds.client').setLevel(logging.DEBUG)
+        logging.getLogger('requests.packages').setLevel(logging.DEBUG)
     org, username, password = open('.tenacct').read().strip().split(':')
     log('Initialising services')
     for service in services:
         clients[service] = getclient(org, service)
     log('Logging into %s tenrox as %s', org, username)
     auth = clients.LogonAs.service.Authenticate(org, username, password, '', True)
+    resp = requests.get(MOBAPI + 'Security', auth=(org + ':' + username, password))
+    assert resp.status_code == 200
+    mobauth = json.loads(resp.text)['Token'] # this is base64 encoded xml...
     userid = auth.UniqueId
-    return userid, auth
+    return userid, auth, mobauth
 
 def get_timesheet(auth, userid, weekdate):
     log('Getting timesheet for week starting %s', weekdate.isoformat())
@@ -188,6 +201,38 @@ def get_assignments(auth, userid, weekdate):
         assignments[assignment.UniqueId] = Assignment(assignment)
     return assignments
 
+# I really really tried to use the official API for this but it's astoundingly
+# poorly designed (and documented). The mobile api is much friendlier.
+def newentry(auth, mobauth, userid, assignment, date, numhours):
+    numsecs = numhours * 60 * 60
+    assert numsecs % 900 == 0
+    assert numsecs == int(numsecs)
+    numsecs = int(numsecs)
+
+    timesheet = get_timesheet(auth, userid, weekstart(date))
+
+    putval = {"KeyValues": [
+        {"IsAttribute": True, "Property": "myproject", "Value": assignment.project_id},
+        {"IsAttribute": True, "Property": "task", "Value": assignment.task_id},
+        {"IsAttribute": True, "Property": "etc", "Value": None},
+        {"IsAttribute": True, "Property": "charge", "Value": "0"},
+        {"IsAttribute": False, "Property": "EntryDate", "Value": date.strftime('%m/%d/%Y')},
+        {"IsAttribute": False, "Property": "RegularTime", "Value": numsecs},
+        {"IsAttribute": False, "Property": "Overtime", "Value": 0},
+        {"IsAttribute": False, "Property": "DoubleOvertime", "Value": 0},
+        {"IsAttribute": False, "Property": "UniqueId", "Value": -1},
+    ]}
+
+    url = MOBAPI + 'Timesheets/%s?property=timeentrylite' % (timesheet.uid,)
+    headers = {
+        'API-Key': mobauth,
+        'Accept': 'application/json, text/plain, */*',
+        'Content-Type': 'application/x-www-form-urlencoded',
+    }
+    data = '=' + urllib.quote(json.dumps(putval))
+    resp = requests.put(url, data=data, headers=headers)
+    assert resp.status_code == 200
+
 def makeweek(timesheet, assignments):
     week = OrderedDict()
     for i in range(7):
@@ -201,7 +246,7 @@ def makeweek(timesheet, assignments):
     return week
 
 def main():
-    userid, auth = init()
+    userid, auth, mobauth = init()
 
     # Get a monday
     startdate = DT.date(year=2015, month=05, day=23)
