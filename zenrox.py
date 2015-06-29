@@ -23,6 +23,9 @@ def getclient(org, svc):
     client.options.location = url
     return client
 
+def weekstart(date):
+    return date - DT.timedelta(days=date.weekday())
+
 services = [
     'LogonAs',
 
@@ -118,13 +121,15 @@ class Timesheet(object):
 
     keys = set(['ActiveSiteUid', 'ActivityGUID', 'AllowEntryInTheAdvance', 'AllowEntryInTheAdvanceType', 'AllowEntryInThePast', 'AllowEntryInThePastType', 'BankedOverTime', 'CanManagerModifyBillable', 'CanManagerModifyPayable', 'DefaultClientUid', 'DefaultProjectUid', 'DefaultWorkTypeUid', 'Details', 'EmployeeType', 'EndDate', 'FunctionalGroupUid', 'FunctionalManagerUid', 'HasAssignments', 'HasErrors', 'HasNotes', 'HasTimeentries', 'HireDate', 'IsTimesheetClosed', 'LeaveTimes', 'LockedDates', 'MasterSiteUid', 'PeriodClosed', 'PersonalDayTime', 'ResourceType', 'RoleObjectType', 'ShowAdjustmentsSection', 'ShowAssignmentsSection', 'ShowLeaveTimeSection', 'ShowNonWorkingTimeSection', 'SickLeaveTime', 'StartDate', 'TemplateName', 'TemplateUid', 'TerminatedDate', 'TimeIncrement', 'TimesheetAssignmentAttributes', 'TimesheetColumns', 'TimesheetEntries', 'TimesheetErrors', 'TimesheetNotes', 'TimesheetStates', 'TimesheetTransitions', 'TotalPeriodOverTime', 'TotalPeriodPayableTime', 'TotalPeriodRegTime', 'UniqueId', 'UserAccessStatus', 'UserFirstName', 'UserID', 'UserLastName', 'UserType', 'UserUID', 'UsersAccessStatus', 'VacationTime', 'WorkflowGUID'])
 
-    def __init__(self, weekstart, obj, *args, **kwargs):
+    def __init__(self, weekdate, obj, *args, **kwargs):
         super(Timesheet, self).__init__(*args, **kwargs)
         assert obj.__class__.__name__ == 'Timesheet'
         assert set([kv[0] for kv in obj]) == self.keys
         self._obj = obj
 
-        self.startdate = weekstart
+        assert weekstart(weekdate) == weekdate
+
+        self.startdate = weekdate
         self.entries = OrderedDict()
         self.assignment_attrs = OrderedDict()
 
@@ -159,19 +164,18 @@ def init():
     userid = auth.UniqueId
     return userid, auth
 
-def get_timesheet(auth, userid, weekstart):
-    log('Getting timesheet for week starting %s', weekstart.isoformat())
-    assert weekstart - DT.timedelta(days=weekstart.weekday()) == weekstart
-    tss = clients.Timesheets.service.QueryTimesheetsDetailsTyped(auth, userid, weekstart)
+def get_timesheet(auth, userid, weekdate):
+    log('Getting timesheet for week starting %s', weekdate.isoformat())
+    tss = clients.Timesheets.service.QueryTimesheetsDetailsTyped(auth, userid, weekdate)
     mytss = tss.MyTimesheets
     assert len(mytss.Timesheet) == 1
-    return Timesheet(weekstart, mytss.Timesheet[0])
+    return Timesheet(weekdate, mytss.Timesheet[0])
 
-def get_assignments(auth, userid, weekstart):
-    log('Getting assignments for week starting %s', weekstart.isoformat())
-    assert weekstart - DT.timedelta(days=weekstart.weekday()) == weekstart
-    weekend = weekstart + DT.timedelta(days=6)
-    aoa = clients.Assignments.service.QueryByUserIdTyped(auth, userid, weekstart.isoformat(), weekend.isoformat())
+def get_assignments(auth, userid, weekdate):
+    log('Getting assignments for week starting %s', weekdate.isoformat())
+    assert weekstart(weekdate) == weekdate
+    weekend = weekdate + DT.timedelta(days=6)
+    aoa = clients.Assignments.service.QueryByUserIdTyped(auth, userid, weekdate.isoformat(), weekend.isoformat())
     assignments = OrderedDict()
     for assignment in aoa.Assignment:
         if assignment.AccessType == 2:
@@ -200,12 +204,12 @@ def main():
     userid, auth = init()
 
     # Get a monday
-    startdate = DT.date(year=2015, month=05, day=25)
-    weekstart = startdate - DT.timedelta(days=startdate.weekday())
+    startdate = DT.date(year=2015, month=05, day=23)
+    weekdate = weekstart(startdate)
 
     # Actually get timesheet
-    timesheet = get_timesheet(auth, userid, weekstart)
-    assignments = get_assignments(auth, userid, weekstart)
+    timesheet = get_timesheet(auth, userid, weekdate)
+    assignments = get_assignments(auth, userid, weekdate)
 
     log('===================')
     log('Possible assignments:')
