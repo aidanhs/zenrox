@@ -15,6 +15,10 @@ import os
 import argparse
 import sys
 import curses
+import string
+import re
+
+INDEXCHRS = string.digits + string.lowercase
 
 DEBUG = False
 
@@ -229,7 +233,7 @@ def get_assignments(auth, userid, weekdate):
 
 # I really really tried to use the official API for this but it's astoundingly
 # poorly designed (and documented). The mobile api is much friendlier.
-def newentry(mobauth, timesheet, assignment, date, numhours):
+def newentry(mobauth, timesheet, assignment, date, numhours, note=None):
     assert not timesheet.readonly
     numsecs = numhours * 60 * 60
     assert numsecs % 900 == 0
@@ -247,6 +251,10 @@ def newentry(mobauth, timesheet, assignment, date, numhours):
         {"IsAttribute": False, "Property": "DoubleOvertime", "Value": 0},
         {"IsAttribute": False, "Property": "UniqueId", "Value": -1},
     ]}
+    if note is not None:
+        putval['Notes'] = [
+            {'Description': note, 'IsPublic': True, 'NoteType': 'ALERT', 'UniqueId': -1}
+        ]
 
     url = MOBAPI + 'Timesheets/%s?property=timeentrylite' % (timesheet.uid,)
     headers = {
@@ -271,18 +279,24 @@ def makeweek(timesheet, assignments):
     return week
 
 def curses_putln(win, msg, *args):
+    y, x = win.getyx()
+    curses_put(win, msg, *args)
+    win.move(y+1, x)
+def curses_put(win, msg, *args):
     line = (msg % args).encode('utf-8')
     win.clrtoeol()
-    y, x = win.getyx()
     win.addstr(line)
-    win.move(y+1, x)
 
 def curses_printtimesheet(win, yofs, timesheet, assignments):
     tsgrid = makeweek(timesheet, assignments)
     win.move(yofs, 0)
+    curses_putln(win, 'Possible assignments:')
+    for i, assignment in enumerate(assignments.values()):
+        curses_putln(win, '%s %s  -  %s', INDEXCHRS[i], assignment.project_name, assignment.task_name)
+    curses_putln(win, '')
     curses_putln(win, 'Timesheet:')
-    for date, entries in makeweek(timesheet, assignments).items():
-        curses_putln(win, '%s %s:', date.isoformat(), date.strftime('%a'))
+    for i, (date, entries) in enumerate(makeweek(timesheet, assignments).items()):
+        curses_putln(win, '%s %s %s:', INDEXCHRS[i], date.isoformat(), date.strftime('%a'))
         for entry in entries:
             curses_putln(win, '    %s - %s hrs', entry['assignment'], entry['numhours'])
 
@@ -295,27 +309,83 @@ def action_curses(stdscr):
     yofs = 2
 
     weekdate = weekstart(DT.date.today())
-    def redraw_ts():
+    def get_ts():
+        return get_timesheet(auth, userid, weekdate)
+    def get_asgns():
+        return get_assignments(auth, userid, weekdate)
+    def redraw_ts(timesheet, assignments):
         stdscr.move(yofs, 0)
         stdscr.clrtobot()
-        timesheet = get_timesheet(auth, userid, weekdate)
-        assignments = get_assignments(auth, userid, weekdate)
         log('Displaying timesheet for %s', weekdate.isoformat())
         curses_printtimesheet(stdscr, yofs, timesheet, assignments)
-        stdscr.redrawln(yofs, stdscr.getyx()[0] - yofs)
+        stdscr.redrawwin()
         stdscr.refresh()
+        return stdscr.getyx()[0] + 1
 
-    redraw_ts()
+    def create_entry():
+        curses.echo()
+        stdscr.move(tsyofs, 0)
+        curses_put(stdscr, 'Assignment: ')
+        assignment_char = stdscr.getkey().lower()
+        stdscr.move(tsyofs+1, 0)
+        curses_put(stdscr, 'Date: ')
+        date_char = stdscr.getkey().lower()
+        stdscr.move(tsyofs+2, 0)
+        curses_put(stdscr, 'Hours: ')
+        hoursstr = stdscr.getstr()
+        stdscr.move(tsyofs+3, 0)
+        curses_put(stdscr, 'Note: ')
+        note = stdscr.getstr()
+        stdscr.move(tsyofs, 0)
+        stdscr.clrtobot()
+        curses.noecho()
+        log('Got assignment:%s date:%s', assignment_char, date_char)
+        assignment_idx = INDEXCHRS.find(assignment_char)
+        date_idx = INDEXCHRS.find(date_char)
+        if not 0 <= assignment_idx < len(assignments):
+            log('Invalid assignment key')
+            return
+        if not 0 <= date_idx < timesheet.numdays:
+            log('Invalid date key')
+            return
+        if re.match(r'^([0-9]|10|11|12|13|14)(\.(0|00|25|5|50|75))?$', hoursstr) is None:
+            log('Invalid number of hours')
+            return
+        assignment = assignments.values()[assignment_idx]
+        date = timesheet.startdate + DT.timedelta(days=date_idx)
+        numhours = float(hoursstr)
+        log('Saving entry')
+        newentry(mobauth, timesheet, assignment, date, numhours, note)
+        log('Saved')
+
+    timesheet, assignments = get_ts(), get_asgns()
+    tsyofs = redraw_ts(timesheet, assignments)
+
     while 1:
         char = stdscr.getch()
         if char == ord('q'):
             break
+        elif char == ord('c'): # create
+            create_entry()
+            timesheet = get_ts()
+            tsyofs = redraw_ts(timesheet, assignments)
+        elif char == ord('m'): # modify
+            assert False
+        elif char == ord('d'): # delete
+            assert False
+        elif char == ord('r'): # refresh
+            timesheet, assignments = get_ts(), get_asgns()
+            tsyofs = redraw_ts(timesheet, assignments)
+        elif char == ord('s'): # save
+            assert False
         elif char == curses.KEY_LEFT:
             weekdate -= DT.timedelta(days=7)
-            redraw_ts()
+            timesheet, assignments = get_ts(), get_asgns()
+            tsyofs = redraw_ts(timesheet, assignments)
         elif char == curses.KEY_RIGHT:
             weekdate += DT.timedelta(days=7)
-            redraw_ts()
+            timesheet, assignments = get_ts(), get_asgns()
+            tsyofs = redraw_ts(timesheet, assignments)
 
     CURSESSCR = None
     return 0
