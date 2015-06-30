@@ -26,7 +26,8 @@ CURSESSCR = None
 def log(msg, *args):
     line = (msg % args).encode('utf-8')
     assert all([c not in line for c in ['\r', '\n']])
-    print(line, file=LOGFILE)
+    if LOGFILE is not None:
+        print(line, file=LOGFILE)
     if CURSESSCR is None:
         print(line, file=sys.stdout)
     else:
@@ -330,8 +331,7 @@ def action_printweek(datestr):
     log('===================')
     return 0
 
-def main():
-
+def init():
     # Init debug logging if necessary
     global DEBUG, LOGFILE
     LOGFILE = open(LOGFILENAME, 'a')
@@ -341,6 +341,9 @@ def main():
         logging.basicConfig(level=logging.INFO, stream=LOGFILE)
         logging.getLogger('suds.client').setLevel(logging.DEBUG)
         logging.getLogger('requests.packages').setLevel(logging.DEBUG)
+
+def main():
+    init()
 
     actions = ['curses', 'printweek']
     parser = argparse.ArgumentParser()
