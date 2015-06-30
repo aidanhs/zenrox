@@ -47,7 +47,19 @@ def getclient(org, svc):
     return client
 
 def weekstart(date):
+    if date.day <= 7:
+        return date - DT.timedelta(days=date.day-1)
     return date - DT.timedelta(days=date.weekday())
+
+def weekend(date):
+    startdate = weekstart(date)
+    # First Sunday after this date (inclusive)
+    enddate = startdate + DT.timedelta(days=6-startdate.weekday())
+    # Make sure beginning and end are in same month
+    while enddate.month != startdate.month:
+        assert enddate > startdate
+        enddate -= DT.timedelta(days=1)
+    return enddate
 
 services = [
     'LogonAs',
@@ -157,6 +169,7 @@ class Timesheet(object):
 
         self.uid = obj.UniqueId
         self.startdate = weekdate
+        self.numdays = (weekend(weekdate) - weekdate).days + 1
         self.entries = OrderedDict()
         self.assignment_attrs = OrderedDict()
         self.readonly = obj.TimesheetStates.TimesheetState[0].IsReadOnly
@@ -200,8 +213,8 @@ def get_timesheet(auth, userid, weekdate):
 def get_assignments(auth, userid, weekdate):
     log('Getting assignments for week starting %s', weekdate.isoformat())
     assert weekstart(weekdate) == weekdate
-    weekend = weekdate + DT.timedelta(days=6)
-    aoa = clients.Assignments.service.QueryByUserIdTyped(auth, userid, weekdate.isoformat(), weekend.isoformat())
+    weekenddate = weekend(weekdate)
+    aoa = clients.Assignments.service.QueryByUserIdTyped(auth, userid, weekdate.isoformat(), weekenddate.isoformat())
     assignments = OrderedDict()
     for assignment in aoa.Assignment:
         if assignment.AccessType == 2:
@@ -247,7 +260,7 @@ def newentry(mobauth, timesheet, assignment, date, numhours):
 
 def makeweek(timesheet, assignments):
     week = OrderedDict()
-    for i in range(7):
+    for i in range(timesheet.numdays):
         week[timesheet.startdate + DT.timedelta(days=i)] = []
     for entry in timesheet.entries.values():
         assignment = assignments[entry.assignment_id]
