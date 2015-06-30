@@ -14,13 +14,27 @@ import logging
 import os
 import argparse
 import sys
+import curses
 
 DEBUG = False
 
 MOBAPI = 'https://m.tenrox.net/2014R3/tenterprise/api/'
 
+LOGFILENAME = 'zenrox.log'
+LOGFILE = None
+CURSESSCR = None
 def log(msg, *args):
-    print(msg % args)
+    line = (msg % args).encode('utf-8')
+    assert all([c not in line for c in ['\r', '\n']])
+    print(line, file=LOGFILE)
+    if CURSESSCR is None:
+        print(line, file=sys.stdout)
+    else:
+        CURSESSCR.move(0, 0)
+        CURSESSCR.clrtoeol()
+        CURSESSCR.addstr(line)
+        CURSESSCR.refresh()
+
 
 def getclient(org, svc):
     url = 'https://{}.tenrox.net/TWebService/{}.svc?singleWsdl'.format(org, svc)
@@ -172,6 +186,7 @@ def initapi():
     assert resp.status_code == 200
     mobauth = json.loads(resp.text)['Token'] # this is base64 encoded xml...
     userid = auth.UniqueId
+    log('Initialisation complete')
     return userid, auth, mobauth
 
 def get_timesheet(auth, userid, weekdate):
@@ -241,6 +256,56 @@ def makeweek(timesheet, assignments):
         })
     return week
 
+def curses_putln(win, msg, *args):
+    line = (msg % args).encode('utf-8')
+    win.clrtoeol()
+    y, x = win.getyx()
+    win.addstr(line)
+    win.move(y+1, x)
+
+def curses_printtimesheet(win, yofs, timesheet, assignments):
+    tsgrid = makeweek(timesheet, assignments)
+    win.move(yofs, 0)
+    curses_putln(win, 'Timesheet:')
+    for date, entries in makeweek(timesheet, assignments).items():
+        curses_putln(win, '%s %s:', date.isoformat(), date.strftime('%a'))
+        for entry in entries:
+            curses_putln(win, '    %s - %s hrs', entry['assignment'], entry['numhours'])
+
+def action_curses(stdscr):
+    global CURSESSCR
+    CURSESSCR = stdscr
+    stdscr.refresh()
+    userid, auth, mobauth = initapi()
+
+    yofs = 2
+
+    weekdate = weekstart(DT.date.today())
+    def redraw_ts():
+        stdscr.move(yofs, 0)
+        stdscr.clrtobot()
+        timesheet = get_timesheet(auth, userid, weekdate)
+        assignments = get_assignments(auth, userid, weekdate)
+        log('Displaying timesheet for %s', weekdate.isoformat())
+        curses_printtimesheet(stdscr, yofs, timesheet, assignments)
+        stdscr.redrawln(yofs, stdscr.getyx()[0] - yofs)
+        stdscr.refresh()
+
+    redraw_ts()
+    while 1:
+        char = stdscr.getch()
+        if char == ord('q'):
+            break
+        elif char == curses.KEY_LEFT:
+            weekdate -= DT.timedelta(days=7)
+            redraw_ts()
+        elif char == curses.KEY_RIGHT:
+            weekdate += DT.timedelta(days=7)
+            redraw_ts()
+
+    CURSESSCR = None
+    return 0
+
 def action_printweek(datestr):
     userid, auth, mobauth = initapi()
 
@@ -268,15 +333,16 @@ def action_printweek(datestr):
 def main():
 
     # Init debug logging if necessary
-    global DEBUG
+    global DEBUG, LOGFILE
+    LOGFILE = open(LOGFILENAME, 'a')
     if os.environ.get('DEBUG', '0') == '1':
         DEBUG = True
     if DEBUG:
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level=logging.INFO, stream=LOGFILE)
         logging.getLogger('suds.client').setLevel(logging.DEBUG)
         logging.getLogger('requests.packages').setLevel(logging.DEBUG)
 
-    actions = ['printweek']
+    actions = ['curses', 'printweek']
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest='action', help='Action. One of: ' + ' '.join(actions))
 
@@ -291,6 +357,8 @@ def main():
     try:
         if args.action == 'printweek':
             sys.exit(action_printweek(args.date))
+        elif args.action == 'curses':
+            sys.exit(curses.wrapper(action_curses))
         else:
             assert False
     except SystemExit:
