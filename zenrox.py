@@ -339,24 +339,25 @@ def action_curses(stdscr):
         stdscr.move(tsyofs, 0)
         stdscr.clrtobot()
         curses.noecho()
-        log('Got assignment:%s date:%s', assignment_char, date_char)
         assignment_idx = INDEXCHRS.find(assignment_char)
         date_idx = INDEXCHRS.find(date_char)
         if not 0 <= assignment_idx < len(assignments):
             log('Invalid assignment key')
-            return
+            return 1
         if not 0 <= date_idx < timesheet.numdays:
             log('Invalid date key')
-            return
+            return 1
         if re.match(r'^([0-9]|10|11|12|13|14)(\.(0|00|25|5|50|75))?$', hoursstr) is None:
             log('Invalid number of hours')
-            return
+            return 1
+        log('Got assignment:%s date:%s', repr(assignment_char), repr(date_char))
         assignment = assignments.values()[assignment_idx]
         date = timesheet.startdate + DT.timedelta(days=date_idx)
         numhours = float(hoursstr)
         log('Saving entry')
         newentry(mobauth, timesheet, assignment, date, numhours, note)
         log('Saved')
+        return 0
 
     timesheet, assignments = get_ts(), get_asgns()
     tsyofs = redraw_ts(timesheet, assignments)
@@ -366,7 +367,8 @@ def action_curses(stdscr):
         if char == ord('q'):
             break
         elif char == ord('c'): # create
-            create_entry()
+            if create_entry() != 0:
+                continue
             timesheet = get_ts()
             tsyofs = redraw_ts(timesheet, assignments)
         elif char == ord('m'): # modify
@@ -379,11 +381,11 @@ def action_curses(stdscr):
         elif char == ord('s'): # save
             assert False
         elif char == curses.KEY_LEFT:
-            weekdate -= DT.timedelta(days=7)
+            weekdate = weekstart(weekdate - DT.timedelta(days=1))
             timesheet, assignments = get_ts(), get_asgns()
             tsyofs = redraw_ts(timesheet, assignments)
         elif char == curses.KEY_RIGHT:
-            weekdate += DT.timedelta(days=7)
+            weekdate = weekend(weekdate) + DT.timedelta(days=1)
             timesheet, assignments = get_ts(), get_asgns()
             tsyofs = redraw_ts(timesheet, assignments)
 
