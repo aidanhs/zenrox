@@ -30,10 +30,13 @@ CURSESSCR = None
 def log(msg, *args):
     line = (msg % args).encode('utf-8')
     assert all([c not in line for c in ['\r', '\n']])
+    line += '\n'
     if LOGFILE is not None:
-        print(line, file=LOGFILE)
+        LOGFILE.write(line)
+        LOGFILE.flush()
     if CURSESSCR is None:
-        print(line, file=sys.stdout)
+        sys.stdout.write(line)
+        sys.stdout.flush()
     else:
         CURSESSCR.move(0, 0)
         CURSESSCR.clrtoeol()
