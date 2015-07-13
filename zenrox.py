@@ -54,17 +54,16 @@ def getclient(org, svc):
     return client
 
 def weekstart(date):
-    if date.day <= 7:
-        return date - DT.timedelta(days=date.day-1)
+    if date.day - date.weekday() < 1:
+        return date.replace(day=1)
     return date - DT.timedelta(days=date.weekday())
 
 def weekend(date):
-    startdate = weekstart(date)
     # First Sunday after this date (inclusive)
-    enddate = startdate + DT.timedelta(days=6-startdate.weekday())
+    enddate = date + DT.timedelta(days=6-date.weekday())
     # Make sure beginning and end are in same month
-    while enddate.month != startdate.month:
-        assert enddate > startdate
+    while enddate.month != date.month:
+        assert enddate > date
         enddate -= DT.timedelta(days=1)
     return enddate
 
