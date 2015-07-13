@@ -196,11 +196,15 @@ class Timesheet(object):
 
 clients = Bunch()
 
-def initapi():
-    org, username, password = open('.tenacct').read().strip().split(':')
+def initapi(org=None, username=None, password=None):
+    if org is None:
+        org = open('.tenorg').read().strip()
+    if username is None or password is None:
+        username, password = open('.tenacct').read().strip().split(':')
     log('Initialising services')
     for service in services:
-        clients[service] = getclient(org, service)
+        if service not in clients:
+            clients[service] = getclient(org, service)
     log('Logging into %s tenrox as %s', org, username)
     auth = clients.LogonAs.service.Authenticate(org, username, password, '', True)
     resp = requests.get(MOBAPI + 'Security', auth=(org + ':' + username, password))
