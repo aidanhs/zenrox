@@ -109,7 +109,7 @@ class Assignment(object):
         assert set([kv[0] for kv in obj]) == self.keys
         self._obj = obj
 
-        assert obj.AccessType == 1
+        assert obj.AccessType in [1, 2]
         assert obj.IsLeaveTime is False
 
         self.uid = obj.UniqueId
@@ -117,6 +117,7 @@ class Assignment(object):
         self.project_name = obj.ProjectName
         self.task_id = obj.TaskUniqueId
         self.task_name = obj.TaskName
+        self.can_use = obj.AccessType == 1
 
 class AssignmentAttr(object):
 
@@ -129,7 +130,7 @@ class AssignmentAttr(object):
         self._obj = obj
 
         assert obj.HasTimeEntry is True
-        assert obj.AccessType == 1
+        assert obj.AccessType in [1, 2]
         assert obj.IsNonWorkingTime is False
 
         self.uid = obj.UniqueID
@@ -204,7 +205,7 @@ def initapi(org=None, username=None, password=None):
     for service in services:
         if service not in clients:
             clients[service] = getclient(org, service)
-    log('Logging into %s tenrox as %s', org, username)
+    log('Logging into %s Tenrox as %s', org, username)
     auth = clients.LogonAs.service.Authenticate(org, username, password, '', True)
     resp = requests.get(MOBAPI + 'Security', auth=(org + ':' + username, password))
     assert resp.status_code == 200
@@ -227,10 +228,6 @@ def get_assignments(auth, userid, weekdate):
     aoa = clients.Assignments.service.QueryByUserIdTyped(auth, userid, weekdate.isoformat(), weekenddate.isoformat())
     assignments = OrderedDict()
     for assignment in aoa.Assignment:
-        if assignment.AccessType == 2:
-            # these seem to be the old 'training' codes that don't show up any
-            # more - most entries appear to have a value of '1'
-            continue
         # TODO: handle leave time
         if assignment.IsLeaveTime == True:
             continue
@@ -298,7 +295,8 @@ def curses_printtimesheet(win, yofs, timesheet, assignments):
     win.move(yofs, 0)
     curses_putln(win, 'Possible assignments:')
     for i, assignment in enumerate(assignments.values()):
-        curses_putln(win, '%s %s  -  %s', INDEXCHRS[i], assignment.project_name, assignment.task_name)
+        prefix = 'X(decomissioned) ' if not assignment.can_use else ''
+        curses_putln(win, '%s%s %s  -  %s', prefix, INDEXCHRS[i], assignment.project_name, assignment.task_name)
     curses_putln(win, '')
     curses_putln(win, 'Timesheet:')
     for i, (date, entries) in enumerate(makeweek(timesheet, assignments).items()):
@@ -358,6 +356,9 @@ def action_curses(stdscr):
             return 1
         log('Got assignment:%s date:%s', repr(assignment_char), repr(date_char))
         assignment = assignments.values()[assignment_idx]
+        if not assignment.can_use:
+            log('Cannot use decomissioned timesheet code')
+            return 1
         date = timesheet.startdate + DT.timedelta(days=date_idx)
         numhours = float(hoursstr)
         log('Saving entry')
