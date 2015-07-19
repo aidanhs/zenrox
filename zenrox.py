@@ -148,6 +148,8 @@ class Entry(object):
 
         assert obj.IsNonWorking is not True # TODO
         assert obj.TotalTime == obj.RegularTime + obj.Overtime + obj.DoubleOvertime
+        assert obj.TotalTime < 60 * 60 * 24
+        assert obj.TotalTime % 60 * 15 == 0
 
         self.uid = obj.UniqueID
         self.note = None
