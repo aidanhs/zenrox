@@ -1,5 +1,7 @@
-(function () {
 'use strict';
+
+var React = require('react');
+var FixedDataTable = require('fixed-data-table');
 
 var LoginBox = React.createClass({
   getInitialState: function() {
@@ -155,4 +157,7 @@ window.ZenroxUI = React.createClass({
   },
 });
 
-})();
+React.render(
+    React.createElement(window.ZenroxUI),
+    document.getElementById('root')
+);

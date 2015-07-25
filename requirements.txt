@@ -2,3 +2,4 @@ bunch>=1.0.1
 suds-jurko==0.6
 requests==2.5.3
 Flask==0.10.1
+nodeenv==0.13.3

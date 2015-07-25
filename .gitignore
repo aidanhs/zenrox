@@ -7,3 +7,6 @@ include
 lib
 local
 share
+src
+js_ui/node_modules
+static

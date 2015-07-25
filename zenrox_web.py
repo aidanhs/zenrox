@@ -19,22 +19,12 @@ HTML = '''
 <html>
 <head>
 <link rel="stylesheet" type="text/css" href="/static/fixed-data-table.min.css"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.13.3/react.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.13.3/JSXTransformer.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
-<script type="text/javascript" src="/static/fixed-data-table.min.js"></script>
-<script type="text/jsx" src="/static/zenrox_ui.js"></script>
 </head>
 <body>
 <div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+<script type="text/javascript" src="/static/zenrox_bundle.js"></script>
 </body>
-<script type="text/jsx">
-'use strict';
-React.render(
-    React.createElement(window.ZenroxUI),
-    document.getElementById('root')
-);
-</script>
 </html>
 '''
 
