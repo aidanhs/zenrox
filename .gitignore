@@ -2,3 +2,8 @@
 .tenorg
 *.pyc
 *.swp
+bin
+include
+lib
+local
+share
