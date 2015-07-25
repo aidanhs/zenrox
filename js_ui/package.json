@@ -3,6 +3,7 @@
   "dependencies": {
     "browserify": "^11.0.0",
     "fixed-data-table": "^0.4.1",
+    "flow-bin": "^0.13.1",
     "react": "^0.13.3",
     "reactify": "^1.1.1"
   },
