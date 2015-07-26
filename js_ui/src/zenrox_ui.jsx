@@ -1,22 +1,28 @@
+/* @flow */
 'use strict';
 
+declare var $: any;
 var React = require('react');
 var FixedDataTable = require('fixed-data-table');
 
-var LoginBox = React.createClass({
-  getInitialState: function() {
-    return { username: '', password: '' };
-  },
-  handleChange: function (e) {
+class LoginBox extends React.Component {
+  props: { onLogin: Function; disabled: boolean };
+  state: { username: string; password: string };
+
+  constructor(props) {
+    super(props);
+    this.state = { username: '', password: '' };
+  }
+  handleChange(e) {
     var elt = e.currentTarget;
     var o = {};
     o[elt.name] = elt.value;
     this.setState(o);
-  },
-  handleLogin: function (e) {
+  }
+  handleLogin(e) {
     this.props.onLogin(this.state);
-  },
-  render: function () {
+  }
+  render() {
     return (<div>
       Username: <input disabled={this.props.disabled} type="text" name="username"
                        value={this.state.username} onChange={this.handleChange} />&nbsp;
@@ -24,11 +30,26 @@ var LoginBox = React.createClass({
                        value={this.state.password} onChange={this.handleChange} />&nbsp;
       <button disabled={this.props.disabled} onClick={this.handleLogin}>Login</button>
     </div>);
-  },
-});
+  }
+}
 
-var TimeSheet = React.createClass({
-  getTs: function (getPrev, getNext) {
+class TimeSheet extends React.createClass {
+  props: void;
+  state: {
+    weekdate: string;
+    assignments: Array<{ uid: number; project: string; task: string }>;
+    // entries: a mapping from yyyy-mm-dd string to entry object
+    // entry: a mapping from assignment_id to num secs
+    entries: { [key: string]: { [key: string]: number } };
+  };
+
+  constructor(props) {
+    super(props);
+    var today = (new Date()).toISOString().slice(0, 10);
+    self.state = { weekdate: today, assignments: [], entries: {} };
+  }
+
+  getTs(getPrev, getNext) {
     if (getPrev && getNext) {
       alert('Cannot get next and previous!');
       return;
@@ -46,20 +67,11 @@ var TimeSheet = React.createClass({
         alert('Couldn\'t get timesheet');
       },
     });
-  },
-  componentDidMount: function () {
+  }
+  componentDidMount() {
     this.getTs(false, false);
-  },
-  getInitialState: function () {
-    /*
-     * assignments: an array of objects each with property: uid
-     * entries: a mapping from yyyy-mm-dd string to entry object
-     * entry: a mapping from assignment_id to num_hours
-     */
-    var today = (new Date()).toISOString().slice(0, 10);
-    return { weekdate: today, assignments: [], entries: {} };
-  },
-  render: function () {
+  }
+  render() {
     var firstwidth = 600
     var colwidth = 120;
 
@@ -100,11 +112,18 @@ var TimeSheet = React.createClass({
         {cols}
       </FixedDataTable.Table>
     </div>);
-  },
-});
+  }
+}
 
-window.ZenroxUI = React.createClass({
-  getAcct: function () {
+class ZenroxUI extends React.component {
+  props: void;
+  state: { username: ?string; disableLogin: boolean };
+
+  constructor(props) {
+    super(props);
+    this.state = { username: null, disableLogin: true };
+  }
+  getAcct() {
     $.ajax({
       url: '/account',
       dataType: 'json',
@@ -118,14 +137,11 @@ window.ZenroxUI = React.createClass({
         alert('Couldn\'t get session info');
       },
     });
-  },
-  componentDidMount: function () {
+  }
+  componentDidMount() {
     this.getAcct();
-  },
-  getInitialState: function() {
-    return { username: null, disableLogin: true };
-  },
-  handleLogin: function (creds) {
+  }
+  handleLogin(creds) {
     this.setState({ disableLogin: true });
     $.ajax({
       method: 'POST',
@@ -138,26 +154,26 @@ window.ZenroxUI = React.createClass({
         alert('Couldn\'t log in');
       },
     });
-  },
-  render: function() {
+  }
+  render() {
     var loginElt;
-    if (this.state.username === null) {
+    if (this.state.username == null) {
     } else {
     }
     return (
       <div>
         <LoginBox username={this.state.username} onLogin={this.handleLogin} disabled={this.state.disableLogin} />
         <div>
-            {this.state.username !== null ?
+            {this.state.username != null ?
                 'Logged in as ' + this.state.username : 'Not logged in'}
         </div>
         {this.state.username !== null ? <TimeSheet /> : undefined}
       </div>
     );
-  },
-});
+  }
+}
 
 React.render(
-    React.createElement(window.ZenroxUI),
+    React.createElement(ZenroxUI),
     document.getElementById('root')
 );

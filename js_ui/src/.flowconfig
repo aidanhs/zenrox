@@ -1,0 +1,14 @@
+[ignore]
+.*/node_modules/.*/dist/.*
+.*/node_modules/browserify/.*
+.*/node_modules/flow-bin/.*
+.*/node_modules/reactify/.*
+
+.*/node_modules/fixed-data-table/.*
+
+[include]
+
+[libs]
+../interfaces/
+
+[options]
