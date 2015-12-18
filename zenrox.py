@@ -18,6 +18,12 @@ import curses
 import string
 import re
 
+# Backport for 2.6
+def timedelta_total_seconds(timedelta):
+    return (
+        timedelta.microseconds + 0.0 +
+        (timedelta.seconds + timedelta.days * 24 * 3600) * 10 ** 6) / 10 ** 6
+
 INDEXCHRS = string.digits + string.lowercase
 
 DEBUG = False
@@ -45,7 +51,7 @@ def log(msg, *args):
 
 
 def getclient(org, svc):
-    url = 'https://{}.tenrox.net/TWebService/{}.svc?singleWsdl'.format(org, svc)
+    url = 'https://{0}.tenrox.net/TWebService/{1}.svc?singleWsdl'.format(org, svc)
     client = Client(url)
     # Tenrox forces a redirect to https, but the wsdl says http connection.
     # Unfortunately this redirection doesn't work with suds. This is a magic
@@ -279,7 +285,7 @@ def makeweek(timesheet, assignments):
         assignment = assignments[entry.assignment_id]
         week[entry.date].append({
             "assignment": assignment.project_name + ' : ' + assignment.task_name,
-            "numhours": entry.time.total_seconds()/60/60,
+            "numhours": timedelta_total_seconds(entry.time)/60/60,
         })
     return week
 
